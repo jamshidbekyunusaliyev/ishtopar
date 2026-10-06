@@ -1,0 +1,230 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SEEKER
+  EMPLOYER
+  ADMIN
+}
+
+enum ExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  SENIOR
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  REMOTE
+  INTERNSHIP
+}
+
+enum JobLevel {
+  BEGINNER
+  INTERMEDIATE
+  SENIOR
+}
+
+enum JobStatus {
+  OPEN
+  CLOSED
+  PENDING_REVIEW
+}
+
+enum ApplicationStatus {
+  PENDING
+  VIEWED
+  ACCEPTED
+  REJECTED
+}
+
+enum NotificationType {
+  APPLICATION_RECEIVED
+  APPLICATION_STATUS
+  NEW_MESSAGE
+  JOB_ALERT
+  MODERATION
+}
+
+model User {
+  id              String           @id @default(cuid())
+  name            String
+  email           String           @unique
+  passwordHash    String
+  role            UserRole         @default(SEEKER)
+  phone           String?
+  blockedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  profile         SeekerProfile?
+  companies       Company[]
+  applications    Application[]    @relation("SeekerApplications")
+  savedJobs       SavedJob[]
+  seekerChats     Conversation[]   @relation("SeekerConversations")
+  employerChats   Conversation[]   @relation("EmployerConversations")
+  messages        Message[]
+  notifications   Notification[]
+  accounts        Account[]
+  sessions        Session[]
+}
+
+model SeekerProfile {
+  userId          String          @id
+  headline        String?
+  bio             String?
+  skills          String          @default("[]")
+  location        String?
+  resumeUrl       String?
+  experienceLevel ExperienceLevel?
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  ownerId     String
+  name        String
+  logo        String?
+  website     String?
+  description String?
+  location    String?
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  jobs        Job[]
+  createdAt   DateTime @default(now())
+
+  @@index([ownerId])
+}
+
+model Job {
+  id          String      @id @default(cuid())
+  companyId   String
+  title       String
+  description String
+  category    String
+  location    String
+  jobType     JobType
+  level       JobLevel
+  salaryMin   Int?
+  salaryMax   Int?
+  currency    String      @default("USD")
+  status      JobStatus   @default(OPEN)
+  isUrgent    Boolean     @default(false)
+  isNew       Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applications Application[]
+  savedBy     SavedJob[]
+  conversations Conversation[]
+
+  @@index([status, createdAt])
+  @@index([category, jobType, level])
+  @@index([companyId])
+}
+
+model Application {
+  id          String            @id @default(cuid())
+  jobId       String
+  seekerId    String
+  coverLetter String?
+  status      ApplicationStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  job         Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  seeker      User              @relation("SeekerApplications", fields: [seekerId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, seekerId])
+  @@index([seekerId, createdAt])
+}
+
+model SavedJob {
+  userId    String
+  jobId     String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([userId, jobId])
+  @@index([jobId])
+}
+
+model Conversation {
+  id         String    @id @default(cuid())
+  jobId      String
+  seekerId   String
+  employerId String
+  createdAt  DateTime  @default(now())
+  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  seeker     User      @relation("SeekerConversations", fields: [seekerId], references: [id], onDelete: Cascade)
+  employer   User      @relation("EmployerConversations", fields: [employerId], references: [id], onDelete: Cascade)
+  messages   Message[]
+
+  @@unique([jobId, seekerId, employerId])
+  @@index([seekerId, createdAt])
+  @@index([employerId, createdAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  senderId       String
+  text           String
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  text      String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([sessionToken])
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@id([identifier, token])
+}
